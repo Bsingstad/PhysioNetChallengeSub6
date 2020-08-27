@@ -12,71 +12,135 @@ import tensorflow_addons as tfa
 
 
 def create_model():
-    inputA = tf.keras.layers.Input(shape=(5000,12)) 
+    n_feature_maps = 64
+    input_shape = (5000,12)
+    input_layer = keras.layers.Input(input_shape)
+
+        # BLOCK 1
+
+    conv_x = keras.layers.Conv1D(filters=n_feature_maps, kernel_size=8, padding='same')(input_layer)
+    conv_x = keras.layers.BatchNormalization()(conv_x)
+    conv_x = keras.layers.Activation('relu')(conv_x)
+
+    conv_y = keras.layers.Conv1D(filters=n_feature_maps, kernel_size=5, padding='same')(conv_x)
+    conv_y = keras.layers.BatchNormalization()(conv_y)
+    conv_y = keras.layers.Activation('relu')(conv_y)
+
+    conv_z = keras.layers.Conv1D(filters=n_feature_maps, kernel_size=3, padding='same')(conv_y)
+    conv_z = keras.layers.BatchNormalization()(conv_z)
+
+        # expand channels for the sum
+    shortcut_y = keras.layers.SeparableConv1D(filters=n_feature_maps, kernel_size=1, padding='same')(input_layer)
+    shortcut_y = keras.layers.BatchNormalization()(shortcut_y)
+
+    output_block_1 = keras.layers.add([shortcut_y, conv_z])
+    output_block_1 = keras.layers.Activation('relu')(output_block_1)
+
+        # BLOCK 2
+
+    conv_x = keras.layers.SeparableConv1D(filters=n_feature_maps * 2, kernel_size=8, padding='same')(output_block_1)
+    conv_x = keras.layers.BatchNormalization()(conv_x)
+    conv_x = keras.layers.Activation('relu')(conv_x)
     
-    conv1 = keras.layers.Conv1D(filters=128, kernel_size=8,input_shape=(5000,12), padding='same')(inputA)
-    conv1 = keras.layers.BatchNormalization()(conv1)
-    conv1 = keras.layers.Activation(activation='relu')(conv1)
+    conv_y = keras.layers.SeparableConv1D(filters=n_feature_maps * 2, kernel_size=5, padding='same')(conv_x)
+    conv_y = keras.layers.BatchNormalization()(conv_y)
+    conv_y = keras.layers.Activation('relu')(conv_y)
 
-    conv2 = keras.layers.Conv1D(filters=256, kernel_size=5, padding='same')(conv1)
-    conv2 = keras.layers.BatchNormalization()(conv2)
-    conv2 = keras.layers.Activation('relu')(conv2)
+    conv_z = keras.layers.SeparableConv1D(filters=n_feature_maps * 2, kernel_size=3, padding='same')(conv_y)
+    conv_z = keras.layers.BatchNormalization()(conv_z)
 
-    conv3 = keras.layers.Conv1D(128, kernel_size=3,padding='same')(conv2)
-    conv3 = keras.layers.BatchNormalization()(conv3)
-    conv3 = keras.layers.Activation('relu')(conv3)
+        # expand channels for the sum
+    shortcut_y = keras.layers.Conv1D(filters=n_feature_maps * 2, kernel_size=1, padding='same')(output_block_1)
+    shortcut_y = keras.layers.BatchNormalization()(shortcut_y)
 
-    gap_layer = keras.layers.GlobalAveragePooling1D()(conv3)
-    model1 = keras.Model(inputs=inputA, outputs=gap_layer)
+    output_block_2 = keras.layers.add([shortcut_y, conv_z])
+    output_block_2 = keras.layers.Activation('relu')(output_block_2)
 
-    conv1 = keras.layers.Conv1D(filters=128,kernel_size=5,strides=1,padding='same')(inputA)
-    conv1 = tfa.layers.InstanceNormalization()(conv1)
-    conv1 = keras.layers.PReLU(shared_axes=[1])(conv1)
-    conv1 = keras.layers.Dropout(rate=0.2)(conv1)
-    conv1 = keras.layers.MaxPooling1D(pool_size=2)(conv1)
-    # conv block -2
-    conv2 = keras.layers.Conv1D(filters=256,kernel_size=11,strides=1,padding='same')(conv1)
-    conv2 = tfa.layers.InstanceNormalization()(conv2)
-    conv2 = keras.layers.PReLU(shared_axes=[1])(conv2)
-    conv2 = keras.layers.Dropout(rate=0.2)(conv2)
-    conv2 = keras.layers.MaxPooling1D(pool_size=2)(conv2)
-    # conv block -3
-    conv3 = keras.layers.Conv1D(filters=512,kernel_size=21,strides=1,padding='same')(conv2)
-    conv3 = tfa.layers.InstanceNormalization()(conv3)
-    conv3 = keras.layers.PReLU(shared_axes=[1])(conv3)
-    conv3 = keras.layers.Dropout(rate=0.2)(conv3)
-    # split for attention
-    attention_data = keras.layers.Lambda(lambda x: x[:,:,:256])(conv3)
-    attention_softmax = keras.layers.Lambda(lambda x: x[:,:,256:])(conv3)
-    # attention mechanism
-    attention_softmax = keras.layers.Softmax()(attention_softmax)
-    multiply_layer = keras.layers.Multiply()([attention_softmax,attention_data])
-    # last layer
-    dense_layer = keras.layers.Dense(units=256,activation='sigmoid')(multiply_layer)
-    dense_layer = tfa.layers.InstanceNormalization()(dense_layer)
-    # output layer
-    flatten_layer = keras.layers.Flatten()(dense_layer)
-    model2 = keras.Model(inputs=inputA, outputs=flatten_layer)
+        # BLOCK 3
 
-    combined = keras.layers.concatenate([model1.output, model2.output])
-    final_layer = keras.layers.Dense(27, activation="sigmoid")(combined)
-    model = keras.models.Model(inputs=inputA, outputs=final_layer)
+    conv_x = keras.layers.Conv1D(filters=n_feature_maps * 2, kernel_size=8, padding='same')(output_block_2)
+    conv_x = keras.layers.BatchNormalization()(conv_x)
+    conv_x = keras.layers.Activation('relu')(conv_x)
+
+    conv_y = keras.layers.Conv1D(filters=n_feature_maps * 2, kernel_size=5, padding='same')(conv_x)
+    conv_y = keras.layers.BatchNormalization()(conv_y)
+    conv_y = keras.layers.Activation('relu')(conv_y)
+
+    conv_z = keras.layers.Conv1D(filters=n_feature_maps * 2, kernel_size=3, padding='same')(conv_y)
+    conv_z = keras.layers.BatchNormalization()(conv_z)
+
+        # no need to expand channels because they are equal
+    shortcut_y = keras.layers.SeparableConv1D(filters=n_feature_maps * 2, kernel_size=1, padding='same')(output_block_2)
+    shortcut_y = keras.layers.BatchNormalization()(shortcut_y)
+
+    output_block_3 = keras.layers.add([shortcut_y, conv_z])
+    output_block_3 = keras.layers.Activation('relu')(output_block_3)
 
 
+        # Block 4
 
-    model.compile(loss=tf.keras.losses.BinaryCrossentropy(), optimizer=tf.keras.optimizers.Adam(learning_rate=0.01), metrics=[tf.keras.metrics.BinaryAccuracy(
-            name='accuracy', dtype=None, threshold=0.5),tf.keras.metrics.Recall(name='Recall'),tf.keras.metrics.Precision(name='Precision'), 
-                        tf.keras.metrics.AUC(
-            num_thresholds=200,
-            curve="ROC",
-            summation_method="interpolation",
-            name="AUC",
-            dtype=None,
-            thresholds=None,
-            multi_label=True,
-            label_weights=None,
-        )])
-  return model
+    conv_x = keras.layers.SeparableConv1D(filters=n_feature_maps * 2, kernel_size=8, padding='same')(output_block_3)
+    conv_x = keras.layers.BatchNormalization()(conv_x)
+    conv_x = keras.layers.Activation('relu')(conv_x)
+
+    conv_y = keras.layers.SeparableConv1D(filters=n_feature_maps * 2, kernel_size=5, padding='same')(conv_x)
+    conv_y = keras.layers.BatchNormalization()(conv_y)
+    conv_y = keras.layers.Activation('relu')(conv_y)
+
+    conv_z = keras.layers.SeparableConv1D(filters=n_feature_maps * 2, kernel_size=3, padding='same')(conv_y)
+    conv_z = keras.layers.BatchNormalization()(conv_z)
+
+          # expand channels for the sum
+    shortcut_y = keras.layers.Conv1D(filters=n_feature_maps * 2, kernel_size=1, padding='same')(output_block_1)
+    shortcut_y = keras.layers.BatchNormalization()(shortcut_y)
+
+    output_block_4 = keras.layers.add([shortcut_y, conv_z])
+    output_block_4 = keras.layers.Activation('relu')(output_block_4)
+
+          # BLOCK 5
+
+    conv_x = keras.layers.Conv1D(filters=n_feature_maps * 2, kernel_size=8, padding='same')(output_block_4)
+    conv_x = keras.layers.BatchNormalization()(conv_x)
+    conv_x = keras.layers.Activation('relu')(conv_x)
+
+    conv_y = keras.layers.Conv1D(filters=n_feature_maps * 2, kernel_size=5, padding='same')(conv_x)
+    conv_y = keras.layers.BatchNormalization()(conv_y)
+    conv_y = keras.layers.Activation('relu')(conv_y)
+
+    conv_z = keras.layers.Conv1D(filters=n_feature_maps * 2, kernel_size=3, padding='same')(conv_y)
+    conv_z = keras.layers.BatchNormalization()(conv_z)
+
+        # no need to expand channels because they are equal
+    shortcut_y = keras.layers.SeparableConv1D(filters=n_feature_maps * 2, kernel_size=1, padding='same')(output_block_2)
+    shortcut_y = keras.layers.BatchNormalization()(shortcut_y)
+
+    output_block_5 = keras.layers.add([shortcut_y, conv_z])
+    output_block_5 = keras.layers.Activation('relu')(output_block_5)
+
+        # FINAL
+
+    gap_layer = keras.layers.GlobalAveragePooling1D()(output_block_5)
+
+    output_layer = keras.layers.Dense(27, activation='softmax')(gap_layer)
+
+    model = keras.models.Model(inputs=input_layer, outputs=output_layer)
+
+    model.compile(loss=tf.keras.losses.BinaryCrossentropy(), optimizer=tf.keras.optimizers.Adam(learning_rate=0.001), metrics=[tf.keras.metrics.BinaryAccuracy(
+    name='accuracy', dtype=None, threshold=0.5),tf.keras.metrics.Recall(name='Recall'),tf.keras.metrics.Precision(name='Precision'), 
+                    tf.keras.metrics.AUC(
+        num_thresholds=200,
+        curve="ROC",
+        summation_method="interpolation",
+        name="AUC",
+        dtype=None,
+        thresholds=None,
+        multi_label=True,
+        label_weights=None,
+    )])
+
+  #@title Plot model for better visualization
+  #plot_model(model, to_file='model_plot.png', show_shapes=True, show_layer_names=True)
+    return model
 
 
 def run_12ECG_classifier(data,header_data,loaded_model):
